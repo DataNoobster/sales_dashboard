@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+import plotly.subplots as sp 
 import seaborn as sns
 from PIL import Image
 from matplotlib.ticker import FuncFormatter
@@ -451,4 +452,4 @@ with col31:
     plot_pareto_chart_by_dealer(df)
 with col32:
     plot_pareto_chart_by_product(df)
-    
+
