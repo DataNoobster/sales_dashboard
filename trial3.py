@@ -5,6 +5,11 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from PIL import Image
 import io
+import requests
+import os
+import google.generativeai as genai
+from sklearn.linear_model import LinearRegression
+import numpy as np
 
 # Set page configuration
 st.set_page_config(
@@ -104,13 +109,43 @@ with st.sidebar:
     data["Month"] = data["Date"].dt.strftime("%B")
 
     st.subheader("Filters")
-    def multi_select_filter(label, column_name, current_df):
-        options = ["All"] + sorted(current_df[column_name].dropna().unique().tolist())
-        selected = st.multiselect(label, options, default="All", help=f"Filter by {label.lower()}")
-        if "All" in selected or not selected:
-            return current_df
-        return current_df[current_df[column_name].isin(selected)]
 
+    def update_filter(key):
+        """Callback function to dynamically update session state"""
+        selected = st.session_state[key]
+        
+        if "All" in selected and len(selected) > 1:
+            selected.remove("All")  # Remove "All"
+        elif not selected:
+            selected.append("All")  # Reset to "All" if empty
+
+        st.session_state[key] = selected  # Update session state
+
+
+    def multi_select_filter(label, column_name, current_df):
+        options = sorted(current_df[column_name].dropna().unique().tolist())
+        key = f"filter_{column_name}"  # Unique key for session state
+
+        # Initialize session state for the filter if not already set
+        if key not in st.session_state:
+            st.session_state[key] = ["All"]
+
+        # Create multi-select with a callback to handle "All" logic
+        selected = st.multiselect(
+            label, 
+            ["All"] + options, 
+            default=st.session_state[key], 
+            key=key, 
+            help=f"Filter by {label.lower()}",
+            on_change=update_filter, 
+            args=(key,)  # Pass the key to the callback function
+        )
+
+        # Filter the dataframe based on selection
+        return current_df if "All" in selected else current_df[current_df[column_name].isin(selected)]
+
+
+    # Define filter order
     filter_order = [
         ("Select Year", "Year"),
         ("Select Month", "Month"),
@@ -121,6 +156,7 @@ with st.sidebar:
         ("Select Customer Type", "Customer Type")
     ]
 
+    # Apply filters
     df = data.copy()
     for label, column in filter_order:
         df = multi_select_filter(label, column, df)
@@ -362,3 +398,79 @@ st.markdown("<strong style='color: #e0e0e0;'>Export Full Dataset</strong>", unsa
 buffer = io.BytesIO()
 df.to_excel(buffer, index=False)
 st.download_button("Download Filtered Data", buffer.getvalue(), "filtered_sales_data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+st.markdown("---")
+with st.expander("📝 Summary Report", expanded=False):
+    st.subheader("Generated Summary")
+
+    def generate_summary(df, api_key, model="gemini-1.5-flash"):
+        try:
+            # Validate DataFrame
+            if df.empty:
+                return "DataFrame is empty. Please upload valid data."
+
+            required_columns = ["Value", "Date", "Quantity"]
+            for col in required_columns:
+                if col not in df.columns:
+                    return f"Missing column: {col}"
+
+            # Convert data types safely
+            df["Value"] = pd.to_numeric(df["Value"], errors="coerce").fillna(0)
+            df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+
+            total_revenue = df["Value"].sum()
+            total_orders = df.shape[0]
+            avg_order_value = df["Value"].mean()
+            top_location = df.groupby("Location")["Value"].sum().idxmax() if "Location" in df.columns else "N/A"
+            top_dealer = df.groupby("Dealer")["Value"].sum().idxmax() if "Dealer" in df.columns else "N/A"
+            top_product = df.groupby("Product Name")["Value"].sum().idxmax() if "Product Name" in df.columns else "N/A"
+            date_range = f"{df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}" if not df["Date"].isna().all() else "N/A"
+
+            # Prepare Gemini prompt with enhanced details
+            prompt = f"""
+            Generate a comprehensive executive summary for a sales dashboard, incorporating key insights from the filtered dataset:
+            
+            **Overview:**
+            - Date Range: {date_range}
+            - Total Revenue: ₹{total_revenue:,.0f}
+            - Total Orders: {total_orders:,}
+            - Average Order Value: ₹{avg_order_value:,.2f}
+            
+            **Key Performance Insights:**
+            - Highest Revenue Location: {top_location} (Leading in sales performance)
+            - Top Dealer: {top_dealer} (Most significant revenue contributor)
+            - Best-Selling Product: {top_product} (Highest revenue generator)
+            
+            **Recommendations:**
+            - Suggestions for optimizing sales strategies and improving revenue.
+            - Insights on inventory management based on demand patterns.
+            
+            Provide a structured, professional, and engaging summary in a clear narrative format, ensuring concise and insightful takeaways in 4-5 sentences, also try to give out the output in bullet points.
+            Try to use specific values while giving out reccomendations or talking about the trend and observations try to show the numbers or the values for better understanding of the viewer
+            """
+
+            genai.configure(api_key=api_key)
+            model_gen = genai.GenerativeModel(model)
+            response = model_gen.generate_content(prompt)
+            summary = response.text.strip()
+            return summary
+
+        except Exception as e:
+            return f"Error processing data or API request: {str(e)}"
+
+    # Secure API Key
+    API_KEY = "AIzaSyC27jgTLd_OmJNfwj3uCpvO37n8yM1K-Us" #replace with your key
+
+    if not API_KEY or API_KEY == "YOUR_GEMINI_API_KEY":
+        st.warning("Please configure your Gemini API key.")
+        summary = "API key not configured."
+    else:
+        # Assuming you have a DataFrame named 'df' from your data loading process
+        if 'df' not in locals() and 'df' not in globals():
+            st.warning("Please load your data first.")
+            summary = "No data loaded."
+        else:
+            with st.spinner("Generating summary..."):
+                summary = generate_summary(df, API_KEY)
+
+    st.success(summary)
