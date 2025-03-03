@@ -8,7 +8,6 @@ import io
 import requests
 import os
 import google.generativeai as genai
-from sklearn.linear_model import LinearRegression
 import numpy as np
 
 # Set page configuration
@@ -68,7 +67,7 @@ with col1:
     st.image(client_logo, width=350)
 with col2:
     st.title("Sales Dashboard")
-st.markdown("<p style='font-size: 14px; color: #e0e0e0;'>_Prototype v0.0.1 | Powered by Skilltelligent_</p>", unsafe_allow_html=True)
+st.markdown("<p style='font-size: 14px; color: #e0e0e0;'>_Prototype v0.0.2 | Powered by Skilltelligent_</p>", unsafe_allow_html=True)
 
 # Load data function (Cached for performance)
 @st.cache_data
