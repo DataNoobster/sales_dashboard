@@ -402,7 +402,7 @@ st.markdown("---")
 with st.expander("📝 Summary Report", expanded=False):
     st.subheader("Generated Summary")
 
-    def generate_summary(df, api_key, model="gemini-1.5-flash"):
+    def generate_summary(df, api_key, model="gemini-2.0-flash"):
         try:
             # Validate DataFrame
             if df.empty:
@@ -425,6 +425,16 @@ with st.expander("📝 Summary Report", expanded=False):
             top_product = df.groupby("Product Name")["Value"].sum().idxmax() if "Product Name" in df.columns else "N/A"
             date_range = f"{df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}" if not df["Date"].isna().all() else "N/A"
 
+            # Additional Insights Based on Filters
+            df["Year"] = df["Date"].dt.year
+            df["Month"] = df["Date"].dt.month_name()
+
+            top_year = df.groupby("Year")["Value"].sum().idxmax() if "Year" in df.columns else "N/A"
+            top_month = df.groupby("Month")["Value"].sum().idxmax() if "Month" in df.columns else "N/A"
+            top_category = df.groupby("Category")["Value"].sum().idxmax() if "Category" in df.columns else "N/A"
+            top_channel = df.groupby("Channel")["Value"].sum().idxmax() if "Channel" in df.columns else "N/A"
+            top_price_range = df.groupby("Price Range")["Value"].sum().idxmax() if "Price Range" in df.columns else "N/A"
+            
             # Prepare Gemini prompt with enhanced details
             prompt = f"""
             Generate a comprehensive executive summary for a sales dashboard, incorporating key insights from the filtered dataset:
@@ -433,19 +443,31 @@ with st.expander("📝 Summary Report", expanded=False):
             - Date Range: {date_range}
             - Total Revenue: ₹{total_revenue:,.0f}
             - Total Orders: {total_orders:,}
-            - Average Order Value: ₹{avg_order_value:,.2f}
             
             **Key Performance Insights:**
             - Highest Revenue Location: {top_location} (Leading in sales performance)
             - Top Dealer: {top_dealer} (Most significant revenue contributor)
             - Best-Selling Product: {top_product} (Highest revenue generator)
+            - Peak Sales Year: {top_year} (Highest revenue year)
+            - Peak Sales Month: {top_month} (Best performing month)
+            - Top Category: {top_category} (Most sold product category)
+            - Dominant Sales Channel: {top_channel} (Most effective sales channel)
+            - Price Range Impact: {top_price_range} (Most revenue-generating price segment)
             
             **Recommendations:**
-            - Suggestions for optimizing sales strategies and improving revenue.
-            - Insights on inventory management based on demand patterns.
+            - Optimize sales strategies by focusing on peak months and years.
+            - Align marketing efforts with high-performing categories and price segments.
+            - Improve inventory management based on demand fluctuations.
             
-            Provide a structured, professional, and engaging summary in a clear narrative format, ensuring concise and insightful takeaways in 4-5 sentences, also try to give out the output in bullet points.
-            Try to use specific values while giving out reccomendations or talking about the trend and observations try to show the numbers or the values for better understanding of the viewer
+            **Instructions:**
+            - Strictly base insights on the filtered data provided.
+            - Provide a structured summary in bullet points.
+            - Keep it precise, professional but discriptive when needed.
+            - Use specific values (e.g., revenue, dates) for clarity and impact.
+            
+            Provide a structured, professional, and engaging summary in a clear narrative format, ensuring concise and insightful takeaways in 4-5 sentences. Also, try to give out the output in bullet points.
+            Try to use specific values while giving out recommendations or talking about trends and observations. Show the numbers or values for better understanding of the viewer.
+            -also keep the data elements which are fetched from the dataset in bold.
             """
 
             genai.configure(api_key=api_key)
